@@ -11,11 +11,23 @@ class SingleSwitchTopo(Topo):
 
     def __init__(self, n=2, **opts):
         Topo.__init__(self, **opts)
-        switch = self.addSwitch('s1')  # 添加一个交换机在拓扑中
-        for h in range(n):
-            host = self.addHost('h%s' % (h + 1))  # 添加主机到拓扑中
-            self.addLink(host, switch)  # 添加双向连接拓扑
 
+        #Add hosts, middleboxes and switches
+        leftHost = self.addHost( 'h1' )
+        rightHost = self.addHost( 'h2' )
+        mb = self.addMiddleBox( 'm1' )
+        topSwitch = self.addSwitch( 's1' )
+        leftSwitch = self.addSwitch( 's2' )
+        rightSwitch = self.addSwitch( 's3' )
+
+        # Add links
+        self.addLink( topSwitch, leftSwitch )
+        self.addLink( topSwitch, rightSwitch )
+        self.addLink( leftSwitch, leftHost )
+        self.addLink( leftSwitch, rightHost )
+        self.addLinkPair( rightSwitch, mb )
+
+topos = { 'mbtopo': ( lambda: MiddleBoxTopo() ) }
 
 def simpleTest():
     topo = SingleSwitchTopo(n=2)
@@ -29,4 +41,4 @@ def simpleTest():
 
 if __name__ == '__main__':
     setLogLevel('info')		# 设置 Mininet 默认输出级别，设置 info 它将提供一些有用的信息
-    simpleTest()
+    # simpleTest()
