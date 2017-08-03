@@ -164,7 +164,7 @@ class Intf( object ):
            method: config method name
            param: arg=value (ignore if value=None)
            value may also be list or dict"""
-        name, value = param.items()[ 0 ]
+        name, value = (param.items())[ 0 ]
         f = getattr( self, method, None )
         if not f or value is None:
             return
@@ -458,7 +458,7 @@ class Link( object ):
             cls2 = intf
 
         intf1 = cls1( name=intfName1, node=node1,
-                      link=self, mac=addr1, **params1  )
+                      link=self, mac=addr1, **params1 )
         intf2 = cls2( name=intfName2, node=node2,
                       link=self, mac=addr2, **params2 )
 

@@ -97,7 +97,7 @@ def errRun( *cmd, **kwargs ):
         for fd, event in readable:
             f = fdtofile[ fd ]
             if event & POLLIN:
-                data = f.read( 1024 )
+                data = str(f.read( 1024 ))
                 if echo:
                     output( data )
                 if f == popen.stdout:

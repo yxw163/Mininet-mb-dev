@@ -28,7 +28,7 @@ from mininet.node import ( Host, CPULimitedHost, Controller, OVSController,
                            Ryu, NOX, RemoteController, findController,
                            DefaultController, NullController,
                            UserSwitch, OVSSwitch, OVSBridge,
-                           IVSSwitch )
+                           IVSSwitch, MiddleBox )
 from mininet.nodelib import LinuxBridge
 from mininet.link import Link, TCLink, TCULink, OVSLink
 from mininet.topo import ( SingleSwitchTopo, LinearTopo,
@@ -71,6 +71,10 @@ HOSTDEF = 'proc'
 HOSTS = { 'proc': Host,
           'rt': specialClass( CPULimitedHost, defaults=dict( sched='rt' ) ),
           'cfs': specialClass( CPULimitedHost, defaults=dict( sched='cfs' ) ) }
+
+MIDDLEBOXDEF = 'transparent'
+MIDDLEBOXES = { 'transparent': MiddleBox,
+                'none': lambda name:None}
 
 CONTROLLERDEF = 'default'
 CONTROLLERS = { 'ref': Controller,
@@ -233,6 +237,7 @@ class MininetRunner( object ):
         opts = OptionParser( description=desc, usage=usage )
         addDictOption( opts, SWITCHES, SWITCHDEF, 'switch' )
         addDictOption( opts, HOSTS, HOSTDEF, 'host' )
+        addDictOption( opts, MIDDLEBOXES, MIDDLEBOXDEF, 'middlebox' )
         addDictOption( opts, CONTROLLERS, [], 'controller', action='append' )
         addDictOption( opts, LINKS, LINKDEF, 'link' )
         addDictOption( opts, TOPOS, TOPODEF, 'topo' )
@@ -347,6 +352,7 @@ class MininetRunner( object ):
 
         topo = buildTopo( TOPOS, opts.topo )
         switch = customClass( SWITCHES, opts.switch )
+        middlebox = customClass( MIDDLEBOXES, opts.middlebox )
         host = customClass( HOSTS, opts.host )
         controller = [ customClass( CONTROLLERS, c )
                        for c in opts.controller ]
@@ -378,8 +384,8 @@ class MininetRunner( object ):
             mininet.cli.CLI = ClusterCLI
 
         mn = Net( topo=topo,
-                  switch=switch, host=host, controller=controller, link=link,
-                  ipBase=opts.ipbase, inNamespace=opts.innamespace,
+                  switch=switch, host=host, middlebox=middlebox, controller=controller, 
+                  link=link, ipBase=opts.ipbase, inNamespace=opts.innamespace,
                   xterms=opts.xterms, autoSetMacs=opts.mac,
                   autoStaticArp=opts.arp, autoPinCpus=opts.pin,
                   listenPort=opts.listenport )

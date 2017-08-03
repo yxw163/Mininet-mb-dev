@@ -99,7 +99,7 @@ from math import ceil
 from mininet.cli import CLI
 from mininet.log import info, error, debug, output, warn
 from mininet.node import ( Node, Host, OVSKernelSwitch, DefaultController,
-                           Controller )
+                           Controller, MiddleBox )
 from mininet.nodelib import NAT
 from mininet.link import Link, Intf
 from mininet.util import ( quietRun, fixLimits, numCores, ensureRoot,
@@ -114,7 +114,7 @@ class Mininet( object ):
     "Network emulation with hosts spawned in network namespaces."
 
     def __init__( self, topo=None, switch=OVSKernelSwitch, host=Host,
-                  controller=DefaultController, link=Link, intf=Intf,
+                  middlebox=MiddleBox, controller=DefaultController, link=Link, intf=Intf,
                   build=True, xterms=False, cleanup=False, ipBase='10.0.0.0/8',
                   inNamespace=False,
                   autoSetMacs=False, autoStaticArp=False, autoPinCpus=False,
@@ -123,6 +123,7 @@ class Mininet( object ):
            topo: Topo (topology) object or None
            switch: default Switch class
            host: default Host class/constructor
+           middlebox: default MiddleBox class/constructor
            controller: default Controller class/constructor
            link: default Link class/constructor
            intf: default Intf class/constructor
@@ -139,6 +140,7 @@ class Mininet( object ):
         self.topo = topo
         self.switch = switch
         self.host = host
+        self.middlebox = middlebox
         self.controller = controller
         self.link = link
         self.intf = intf
@@ -162,8 +164,9 @@ class Mininet( object ):
         self.switches = []
         self.controllers = []
         self.links = []
+        self.middleboxes = []
 
-        self.nameToNode = {}  # name to Node (Host/Switch) objects
+        self.nameToNode = {}  # name to Node (Host/Switch/Middleboxes) objects
 
         self.terms = []  # list of spawned xterm processes
 
@@ -227,6 +230,34 @@ class Mininet( object ):
         self.hosts.append( h )
         self.nameToNode[ name ] = h
         return h
+
+    """
+    Description: add MiddleBox
+    Author: yangxw163@gmail.com 
+    Date: Aug 2, 2017
+    """   
+    def addMiddleBox( self, name, cls=None, **params ):
+        """Add MiddleBox.
+           name: name of middlebox to add
+           cls: custom middlebox class/constructor (optional)
+           params: parameters for middlebox
+           returns: added middlebox
+        """
+        defaults = {}
+        if self.autoSetMacs:
+            defaults[ 'mac'] = macColonHex( self.nextIP )
+        self.nextIP += 1
+        defaults.update( params )
+        if not cls:
+            cls = self.middlebox
+        m = cls( name, **defaults )
+        self.middleboxes.append( m )
+        self.nameToNode[ name ] = m
+        return m
+
+    def delMiddleBox( self, middlebox ):
+        "Delete a MiddleBox"
+        self.delNode( middlebox, nodes=self.middleboxes )
 
     def delNode( self, node, nodes=None):
         """Delete node
@@ -342,13 +373,13 @@ class Mininet( object ):
 
     def __iter__( self ):
         "return iterator over node names"
-        for node in chain( self.hosts, self.switches, self.controllers ):
+        for node in chain( self.hosts, self.switches, self.middleboxes self.controllers ):
             yield node.name
 
     def __len__( self ):
         "returns number of nodes in net"
         return ( len( self.hosts ) + len( self.switches ) +
-                 len( self.controllers ) )
+                 len( self.controllers ) + len( self.middleboxes ))
 
     def __contains__( self, item ):
         "returns True if net contains named node"
@@ -406,6 +437,19 @@ class Mininet( object ):
         link.delete()
         self.links.remove( link )
 
+    def addLinkPair(self, node1, node2, port1a=None, port1b=None,
+                    port2a=None, port2b=None, cls=None, **params):
+        """"Add a link pair from node1 to node2
+            node1: source node
+            node2: dest node
+            port1a,b: source port on node1
+            port2a,b: dest port on node2
+            returns: link objects"""
+        return (self.addLink(node1, node2, port1a, port1b, cls,
+                             **params),
+                self.addLink(node1, node2, port2a, port2b, cls, 
+                             **params))
+
     def linksBetween( self, node1, node2 ):
         "Return Links between node1 and node2"
         return [ link for link in self.links
@@ -443,6 +487,18 @@ class Mininet( object ):
             # it needs to be done somewhere.
         info( '\n' )
 
+    def configMiddleboxes( self ):
+        "Configure a set of middleboxes."
+        for middlebox in self.middleboxes:
+            info( middlebox.name + ' ' )
+            intf = middlebox.defaultIntf()
+            if intf:
+                middlebox.configDefault()
+            else:
+                # Don't configure nonexistent intf
+                middlebox.configDefault( ip=None, mac=None )
+        info( '\n' )
+
     def buildFromTopo( self, topo=None ):
         """Build mininet from a topology object
            At the end of this function, everything should be connected
@@ -473,6 +529,11 @@ class Mininet( object ):
             self.addHost( hostName, **topo.nodeInfo( hostName ) )
             info( hostName + ' ' )
 
+        info( '\n*** Adding middleboxes:\n' )
+        for middleboxName in topo.middleboxes():
+            self.addMiddleBox( middleboxName, **topo.nodeInfo( middleboxName ) )
+            info( middleboxName + ' ' )
+
         info( '\n*** Adding switches:\n' )
         for switchName in topo.switches():
             # A bit ugly: add batch parameter if appropriate
@@ -488,6 +549,7 @@ class Mininet( object ):
                 sort=True, withInfo=True ):
             self.addLink( **params )
             info( '(%s, %s) ' % ( srcName, dstName ) )
+            info('\n')
 
         info( '\n' )
 
@@ -504,6 +566,8 @@ class Mininet( object ):
             self.configureControlNetwork()
         info( '*** Configuring hosts\n' )
         self.configHosts()
+        info( '*** Configuring middleboxes\n' )
+        self.configMiddleboxes()
         if self.xterms:
             self.startTerms()
         if self.autoStaticArp:
@@ -520,6 +584,7 @@ class Mininet( object ):
         self.terms += makeTerms( self.controllers, 'controller' )
         self.terms += makeTerms( self.switches, 'switch' )
         self.terms += makeTerms( self.hosts, 'host' )
+        self.terms += makeTerms( self.middleboxes, 'middlebox' )
 
     def stopXterms( self ):
         "Kill each xterm."
@@ -554,6 +619,10 @@ class Mininet( object ):
             if hasattr( swclass, 'batchStartup' ):
                 success = swclass.batchStartup( switches )
                 started.update( { s: s for s in success } )
+        info( '\n*** Starting %s middleboxes\n' % len( self.middleboxes ) )
+        for middlebox in self.middleboxes:
+            info( middlebox.name + ' ')
+            middlebox.start()
         info( '\n' )
         if self.waitConn:
             self.waitConnected()
@@ -586,6 +655,11 @@ class Mininet( object ):
             if switch not in stopped:
                 switch.stop()
             switch.terminate()
+        info( '\n' )
+        info( '*** Stopping %i middleboxes\n' % len( self.middleboxes ) )
+        for middlebox in self.middleboxes:
+            info( middlebox.name + ' ' )
+            middlebox.terminate()
         info( '\n' )
         info( '*** Stopping %i hosts\n' % len( self.hosts ) )
         for host in self.hosts:
@@ -924,7 +998,7 @@ class Mininet( object ):
         "Initialize Mininet"
         if cls.inited:
             return
-        ensureRoot()
+        # ensureRoot()
         fixLimits()
         cls.inited = True
 

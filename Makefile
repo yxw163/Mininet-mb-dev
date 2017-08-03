@@ -2,6 +2,8 @@ MININET = mininet/*.py
 TEST = mininet/test/*.py
 EXAMPLES = mininet/examples/*.py
 MN = bin/mn
+EBDIR = util/ether_bridge
+EB = $(EBDIR)/etherbridge
 PYMN = python -B bin/mn
 BIN = $(MN)
 PYSRC = $(MININET) $(TEST) $(EXAMPLES) $(BIN)
@@ -46,8 +48,12 @@ slowtest: $(MININET)
 mnexec: mnexec.c $(MN) mininet/net.py
 	cc $(CFLAGS) $(LDFLAGS) -DVERSION=\"`PYTHONPATH=. $(PYMN) --version`\" $< -o $@
 
+$(EB):
+	cd $(EBDIR) && $(MAKE) all ||exit 1
+
 install: $(MNEXEC) $(MANPAGES)
 	install $(MNEXEC) $(BINDIR)
+	install $(EB) $(BINDIR)
 	install $(MANPAGES) $(MANDIR)
 	python setup.py install
 

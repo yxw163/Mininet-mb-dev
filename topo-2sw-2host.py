@@ -32,3 +32,6 @@ class MyTopo( Topo ):
 
 
 topos = { 'mytopo': ( lambda: MyTopo() ) }
+
+if __name__ == '__main__':
+    MyTopo()

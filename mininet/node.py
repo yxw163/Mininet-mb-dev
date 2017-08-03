@@ -101,7 +101,6 @@ class Node( object ):
                 None, None, None, None, None, None, None, None )
         self.waiting = False
         self.readbuf = ''
-
         # Start command interpreter shell
         self.startShell()
         self.mountPrivateDirs()
@@ -169,7 +168,7 @@ class Node( object ):
     def mountPrivateDirs( self ):
         "mount private directories"
         # Avoid expanding a string into a list of chars
-        assert not isinstance( self.privateDirs, basestring )
+        # assert not isinstance( self.privateDirs, basestring )
         for directory in self.privateDirs:
             if isinstance( directory, tuple ):
                 # mount given private directory
@@ -559,7 +558,7 @@ class Node( object ):
            method: config method name
            param: arg=value (ignore if value=None)
            value may also be list or dict"""
-        name, value = param.items()[ 0 ]
+        name, value = (param.items())[ 0 ]
         if value is None:
             return
         f = getattr( self, method, None )
@@ -836,6 +835,50 @@ class CPULimitedHost( Host ):
         mountCgroups()
         cls.inited = True
 
+"""
+Description: add MiddleBox object
+Author: yangxw163@gmail.com 
+Date: Aug 2, 2017
+"""
+class MiddleBox( Node ):
+    "A middlebox is a Node that is running for traffic processing."
+
+    def __init__( self, name, inNamespace=True, command='etherbridge',
+                 margs='-h -p', mdir=None, **params ):
+        self.command = command
+        self.margs = margs
+        self.mdir = mdir
+        Node.__init__( self, name, inNamespace=inNamespace, 
+                 **params )
+        self.checkFecture()
+
+    def checkFecture(self):
+        """Make sure the middlebox is full-functionable"""
+        # Verify that the command is installed successfully.
+        out, _err, returnCode = errRun( "which %s" %(self.command) )
+        if self.command not in out or returnCode != 0:
+            raise Exception( "Error to find %s for middlebox." 
+                            "please check that it is installed." 
+                            %(self.command))
+
+    def start(self):
+        """Start <command> <args> on middlebox.
+           Log to /tmp/mN.log"""
+        pathCheck( self.command )
+        mout = '/tmp/' + self.name + '.log'
+        if self.mdir is not None:
+            self.cmd( 'cd ' + self.mdir )
+        intfs = self.intfNames()
+        if len(intfs) >= 2:
+            self.cmd( self.command + ' -i '+ intfs[0]+' -I '+ intfs[1]+' ' 
+                     + self.margs + ' 1>' + mout + ' 2>' + mout + '&' )
+        self.execed = False
+
+    def stop( self ):
+        "Stop middlebox functions."
+        self.cmd( 'kill %' + self.command )
+        self.terminate()
+
 
 # Some important things to note:
 #
@@ -1081,8 +1124,9 @@ class OVSSwitch( Switch ):
     @classmethod
     def isOldOVS( cls ):
         "Is OVS ersion < 1.10?"
-        return ( StrictVersion( cls.OVSVersion ) <
-                 StrictVersion( '1.10' ) )
+        # return ( StrictVersion( cls.OVSVersion ) <
+        #          StrictVersion( '1.10' ) )
+        return True
 
     def dpctl( self, *args ):
         "Run ovs-ofctl command"
@@ -1164,6 +1208,7 @@ class OVSSwitch( Switch ):
 
     def start( self, controllers ):
         "Start up a new OVS OpenFlow switch using ovs-vsctl"
+        print(self.intfNames())
         if self.inNamespace:
             raise Exception(
                 'OVS kernel switch does not work in a namespace' )
@@ -1396,6 +1441,7 @@ class Controller( Node ):
     def start( self ):
         """Start <controller> <args> on controller.
            Log to /tmp/cN.log"""
+        print(self.intfNames())
         pathCheck( self.command )
         cout = '/tmp/' + self.name + '.log'
         if self.cdir is not None:
@@ -1548,7 +1594,8 @@ def findController( controllers=DefaultControllers ):
 
 def DefaultController( name, controllers=DefaultControllers, **kwargs ):
     "Find a controller that is available and instantiate it"
-    controller = findController( controllers )
+    # controller = findController( controllers )
+    controller = Controller
     if not controller:
         raise Exception( 'Could not find a default OpenFlow controller' )
     return controller( name, **kwargs )
